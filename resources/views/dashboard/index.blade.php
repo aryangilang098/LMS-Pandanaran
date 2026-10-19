@@ -63,13 +63,11 @@
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon si-red"><i class="bi bi-credit-card-fill"></i></div>
+        <div class="stat-icon si-purple"><i class="bi bi-diagram-3-fill"></i></div>
         <div class="stat-body">
-            <div class="stat-num">{{ $pending_payments }}</div>
-            <div class="stat-label">Pembayaran Pending</div>
-            @if($pending_payments > 0)
-            <a href="{{ route('payment.finance.index') }}"><div class="stat-sub">Verifikasi sekarang →</div></a>
-            @endif
+            <div class="stat-num">{{ $total_courses }}</div>
+            <div class="stat-label">Plotting Mapel Aktif</div>
+            <a href="{{ route('admin.courses.plotting') }}"><div class="stat-sub">Kelola Plotting →</div></a>
         </div>
     </div>
 </div>

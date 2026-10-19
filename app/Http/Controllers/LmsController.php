@@ -14,25 +14,75 @@ use App\Models\Attendance;
 use App\Models\AttendanceRecord;
 use App\Models\ExamGrade;
 use App\Models\User;
+use App\Models\SchoolClass;
+use App\Models\Subject;
+use App\Models\StudentElectiveSubject;
 use Illuminate\Support\Facades\Storage;
 
 class LmsController extends Controller
 {
     // ─── COURSES ─────────────────────────────────────────────────────────────────
 
-    public function courses()
+    public function courses(Request $request)
     {
         $user = Auth::user();
 
-        if ($user->isGuru()) {
-            $courses = Course::with(['subject', 'schoolClass'])
-                ->where('teacher_id', $user->id)->get();
-        } else {
-            $courses = Course::with(['subject', 'teacher'])
-                ->where('class_id', $user->class_id)->get();
+        // 1. ADMIN: Bisa masuk dan memantau SEMUA mapel di seluruh kelas
+        if ($user->isAdmin()) {
+            $query = Course::with(['subject', 'schoolClass', 'teacher'])
+                ->withCount(['materials', 'assignments', 'quizzes']);
+
+            if ($request->class_id) {
+                $query->where('class_id', $request->class_id);
+            }
+            if ($request->search) {
+                $query->whereHas('subject', function($q) use ($request) {
+                    $q->where('name', 'like', "%{$request->search}%")
+                      ->orWhere('code', 'like', "%{$request->search}%");
+                });
+            }
+
+            $courses = $query->orderBy('class_id')->get();
+            $classes = SchoolClass::withCount('students')->get();
+
+            return view('lms.courses.index', compact('courses', 'classes'));
         }
 
-        return view('lms.courses.index', compact('courses'));
+        // 2. GURU: Hanya mapel yang diampu oleh guru tersebut
+        if ($user->isGuru()) {
+            $courses = Course::with(['subject', 'schoolClass'])
+                ->withCount(['materials', 'assignments', 'quizzes'])
+                ->where('teacher_id', $user->id)->get();
+            return view('lms.courses.index', compact('courses'));
+        }
+
+        // 3. SISWA:
+        $studentClass = $user->schoolClass;
+        $isGrade10 = $studentClass ? $studentClass->isGrade10() : true;
+
+        $query = Course::with(['subject', 'teacher', 'schoolClass'])
+            ->withCount(['materials', 'assignments', 'quizzes'])
+            ->where('class_id', $user->class_id);
+
+        if ($isGrade10) {
+            // Siswa kelas 10 diberikan mata pelajaran default / wajib
+            $courses = $query->whereHas('subject', function($q) {
+                $q->where('is_elective', false);
+            })->get();
+        } else {
+            // Siswa kelas 11-12: Mapel wajib + Mapel peminatan yang dipilih
+            $chosenElectiveSubjectIds = StudentElectiveSubject::where('student_id', $user->id)
+                ->where('status', 'active')
+                ->pluck('subject_id')
+                ->toArray();
+
+            $courses = $query->whereHas('subject', function($q) use ($chosenElectiveSubjectIds) {
+                $q->where('is_elective', false)
+                  ->orWhereIn('id', $chosenElectiveSubjectIds);
+            })->get();
+        }
+
+        return view('lms.courses.index', compact('courses', 'isGrade10', 'studentClass'));
     }
 
     public function showCourse($id)
@@ -42,6 +92,76 @@ class LmsController extends Controller
             ->findOrFail($id);
 
         return view('lms.courses.show', compact('course', 'user'));
+    }
+
+    // ─── SISWA ELECTIVE (Peminatan Kelas 11-12) ──────────────────────────────────
+
+    public function electives()
+    {
+        $user = Auth::user();
+        if (!$user->isSiswa()) {
+            abort(403);
+        }
+
+        $studentClass = $user->schoolClass;
+        $gradeLevel = $studentClass ? $studentClass->getGradeLevel() : '10';
+        $isSenior = in_array($gradeLevel, ['11', '12']);
+
+        // Mapel peminatan yang disediakan admin untuk tingkat kelas ini
+        $availableElectives = Subject::elective()
+            ->where(function($q) use ($gradeLevel) {
+                $q->where('grade_level', $gradeLevel)
+                  ->orWhere('grade_level', '11-12')
+                  ->orWhere('grade_level', 'all');
+            })
+            ->withCount('electiveStudents')
+            ->get();
+
+        $chosenSubjectIds = StudentElectiveSubject::where('student_id', $user->id)
+            ->where('status', 'active')
+            ->pluck('subject_id')
+            ->toArray();
+
+        return view('lms.electives.index', compact('user', 'studentClass', 'gradeLevel', 'isSenior', 'availableElectives', 'chosenSubjectIds'));
+    }
+
+    public function toggleElective(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->isSiswa()) {
+            abort(403);
+        }
+
+        $studentClass = $user->schoolClass;
+        if (!$studentClass || !$studentClass->isSeniorGrade()) {
+            return back()->with('error', 'Pemilihan mata pelajaran peminatan hanya untuk siswa kelas 11 dan 12. Siswa kelas 10 mengikuti kurikulum paket default.');
+        }
+
+        $request->validate([
+            'subject_id' => 'required|exists:subjects,id',
+            'action'     => 'required|in:enroll,drop',
+        ]);
+
+        $subject = Subject::where('id', $request->subject_id)->where('is_elective', true)->firstOrFail();
+
+        if ($request->action === 'enroll') {
+            StudentElectiveSubject::updateOrCreate(
+                [
+                    'student_id'    => $user->id,
+                    'subject_id'    => $subject->id,
+                    'academic_year' => $studentClass->academic_year ?? '2025/2026',
+                ],
+                [
+                    'status' => 'active',
+                ]
+            );
+            return back()->with('success', "Berhasil memilih mata pelajaran peminatan: {$subject->name}!");
+        } else {
+            StudentElectiveSubject::where('student_id', $user->id)
+                ->where('subject_id', $subject->id)
+                ->delete();
+            return back()->with('success', "Mata pelajaran peminatan {$subject->name} berhasil dibatalkan.");
+        }
     }
 
     // ─── MATERIALS ───────────────────────────────────────────────────────────────

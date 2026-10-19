@@ -39,15 +39,16 @@ class DashboardController extends Controller
         $avgScore = AssignmentSubmission::where('status', 'graded')->avg('score');
 
         return [
-            'total_siswa'   => User::where('role', 'siswa')->count(),
-            'total_guru'    => User::where('role', 'guru')->count(),
-            'total_kelas'   => SchoolClass::count(),
-            'total_mapel'   => Subject::count(),
-            'total_berita'  => Post::count(),
-            'pending_payments' => Payment::where('status', 'pending')->count(),
-            'avg_score'     => round($avgScore ?? 0, 1),
-            'recent_posts'  => Post::with('author')->latest('published_at')->take(5)->get(),
-            'recent_users'  => User::latest()->take(5)->get(),
+            'total_siswa'     => User::where('role', 'siswa')->count(),
+            'total_guru'      => User::where('role', 'guru')->count(),
+            'total_kelas'     => SchoolClass::count(),
+            'total_mapel'     => Subject::count(),
+            'total_courses'   => Course::count(),
+            'total_peminatan' => Subject::where('is_elective', true)->count(),
+            'total_berita'    => Post::count(),
+            'avg_score'       => round($avgScore ?? 0, 1),
+            'recent_posts'    => Post::with('author')->latest('published_at')->take(5)->get(),
+            'recent_users'    => User::latest()->take(5)->get(),
         ];
     }
 

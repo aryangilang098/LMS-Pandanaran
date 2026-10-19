@@ -6,10 +6,12 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\SchoolClass;
 use App\Models\Subject;
+use App\Models\Course;
 use App\Models\Post;
 use App\Models\FeeType;
 use App\Models\Registration;
 use App\Models\ContactMessage;
+use App\Models\StudentElectiveSubject;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -160,6 +162,202 @@ class AdminController extends Controller
         $request->validate(['name' => 'required|string|max:50', 'academic_year' => 'required|string']);
         SchoolClass::create($request->only('name', 'academic_year', 'homeroom_teacher_name'));
         return back()->with('success', 'Kelas berhasil ditambahkan!');
+    }
+
+    // ─── SUBJECTS (MATA PELAJARAN) ──────────────────────────────────────────────
+
+    public function subjects(Request $request)
+    {
+        $query = Subject::withCount('courses');
+
+        if ($request->category) {
+            $query->where('category', $request->category);
+        }
+        if ($request->grade_level) {
+            $query->forGrade($request->grade_level);
+        }
+        if ($request->type === 'elective') {
+            $query->elective();
+        } elseif ($request->type === 'required') {
+            $query->required();
+        }
+
+        $subjects = $query->orderBy('name')->get();
+        return view('admin.subjects.index', compact('subjects'));
+    }
+
+    public function storeSubject(Request $request)
+    {
+        $request->validate([
+            'code'        => 'required|string|max:20|unique:subjects,code',
+            'name'        => 'required|string|max:255',
+            'category'    => 'required|in:keagamaan,umum,peminatan',
+            'grade_level' => 'required|in:all,10,11,12,11-12',
+            'is_elective' => 'required|boolean',
+        ]);
+
+        Subject::create($request->only('code', 'name', 'category', 'grade_level', 'is_elective'));
+
+        return back()->with('success', 'Mata pelajaran berhasil ditambahkan!');
+    }
+
+    public function updateSubject(Request $request, $id)
+    {
+        $subject = Subject::findOrFail($id);
+        $request->validate([
+            'code'        => 'required|string|max:20|unique:subjects,code,' . $id,
+            'name'        => 'required|string|max:255',
+            'category'    => 'required|in:keagamaan,umum,peminatan',
+            'grade_level' => 'required|in:all,10,11,12,11-12',
+            'is_elective' => 'required|boolean',
+        ]);
+
+        $subject->update($request->only('code', 'name', 'category', 'grade_level', 'is_elective'));
+
+        return back()->with('success', 'Mata pelajaran berhasil diperbarui!');
+    }
+
+    public function deleteSubject($id)
+    {
+        Subject::findOrFail($id)->delete();
+        return back()->with('success', 'Mata pelajaran berhasil dihapus!');
+    }
+
+    // ─── COURSE PLOTTING (Assign Subject + Teacher to Class) ────────────────────
+
+    public function coursePlotting(Request $request)
+    {
+        $query = Course::with(['subject', 'schoolClass', 'teacher']);
+
+        if ($request->class_id) {
+            $query->where('class_id', $request->class_id);
+        }
+        if ($request->subject_id) {
+            $query->where('subject_id', $request->subject_id);
+        }
+
+        $courses  = $query->orderBy('class_id')->orderBy('day')->get();
+        $classes  = SchoolClass::withCount('students')->get();
+        $subjects = Subject::orderBy('name')->get();
+        $teachers = User::where('role', 'guru')->orderBy('name')->get();
+
+        return view('admin.subjects.plotting', compact('courses', 'classes', 'subjects', 'teachers'));
+    }
+
+    public function storeCourse(Request $request)
+    {
+        $request->validate([
+            'class_id'   => 'required|exists:classes,id',
+            'subject_id' => 'required|exists:subjects,id',
+            'teacher_id' => 'required|exists:users,id',
+            'day'        => 'nullable|string',
+            'time_start' => 'nullable|string',
+            'time_end'   => 'nullable|string',
+            'room'       => 'nullable|string',
+        ]);
+
+        Course::create($request->only('class_id', 'subject_id', 'teacher_id', 'day', 'time_start', 'time_end', 'room'));
+
+        return back()->with('success', 'Plotting mata pelajaran berhasil ditambahkan!');
+    }
+
+    public function updateCourse(Request $request, $id)
+    {
+        $course = Course::findOrFail($id);
+        $request->validate([
+            'class_id'   => 'required|exists:classes,id',
+            'subject_id' => 'required|exists:subjects,id',
+            'teacher_id' => 'required|exists:users,id',
+            'day'        => 'nullable|string',
+            'time_start' => 'nullable|string',
+            'time_end'   => 'nullable|string',
+            'room'       => 'nullable|string',
+        ]);
+
+        $course->update($request->only('class_id', 'subject_id', 'teacher_id', 'day', 'time_start', 'time_end', 'room'));
+
+        return back()->with('success', 'Plotting berhasil diperbarui!');
+    }
+
+    public function deleteCourse($id)
+    {
+        Course::findOrFail($id)->delete();
+        return back()->with('success', 'Plotting mata pelajaran berhasil dihapus!');
+    }
+
+    // ─── ELECTIVE SUBJECT MANAGEMENT ────────────────────────────────────────────
+
+    public function electiveManagement(Request $request)
+    {
+        $electiveSubjects = Subject::elective()->withCount('electiveStudents')->orderBy('name')->get();
+        $classes = SchoolClass::withCount('students')
+            ->get()
+            ->filter(function ($class) {
+                // Only show classes 11 and 12
+                return preg_match('/^(XI|XII)/i', $class->name);
+            });
+
+        $selectedClassId = $request->class_id;
+        $students = collect();
+        if ($selectedClassId) {
+            $students = User::where('role', 'siswa')
+                ->where('class_id', $selectedClassId)
+                ->with('electiveSubjects')
+                ->orderBy('name')
+                ->get();
+        }
+
+        return view('admin.subjects.electives', compact('electiveSubjects', 'classes', 'students', 'selectedClassId'));
+    }
+
+    public function toggleElectiveForStudent(Request $request)
+    {
+        $request->validate([
+            'student_id' => 'required|exists:users,id',
+            'subject_id' => 'required|exists:subjects,id',
+            'action'     => 'required|in:enroll,drop',
+        ]);
+
+        $student = User::findOrFail($request->student_id);
+        $subject = Subject::findOrFail($request->subject_id);
+
+        if ($request->action === 'enroll') {
+            StudentElectiveSubject::updateOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'subject_id' => $subject->id,
+                    'academic_year' => '2025/2026',
+                ],
+                ['status' => 'active']
+            );
+            return back()->with('success', "{$student->name} berhasil didaftarkan ke mata pelajaran {$subject->name}!");
+        } else {
+            StudentElectiveSubject::where('student_id', $student->id)
+                ->where('subject_id', $subject->id)
+                ->delete();
+            return back()->with('success', "{$student->name} berhasil dihapus dari mata pelajaran {$subject->name}!");
+        }
+    }
+
+    // ─── MONITOR ALL COURSES (Admin melihat semua mapel) ────────────────────────
+
+    public function monitorCourses(Request $request)
+    {
+        $query = Course::with(['subject', 'schoolClass', 'teacher', 'materials', 'assignments', 'quizzes']);
+
+        if ($request->class_id) {
+            $query->where('class_id', $request->class_id);
+        }
+        if ($request->search) {
+            $query->whereHas('subject', function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->search}%");
+            });
+        }
+
+        $courses = $query->orderBy('class_id')->get();
+        $classes = SchoolClass::withCount('students')->get();
+
+        return view('admin.subjects.monitor', compact('courses', 'classes'));
     }
 
     // ─── PPDB REGISTRATIONS ─────────────────────────────────────────────────────

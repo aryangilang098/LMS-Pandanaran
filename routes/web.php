@@ -76,6 +76,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/kelas/{courseId}/nilai-ujian', [LmsController::class, 'showExamGrades'])->name('exam_grades');
         Route::post('/kelas/{courseId}/nilai-ujian', [LmsController::class, 'storeExamGrades'])
             ->middleware('role:guru,admin')->name('exam_grades.store');
+
+        // Elective Subjects (Peminatan Siswa Kelas 11-12)
+        Route::get('/peminatan', [LmsController::class, 'electives'])
+            ->middleware('role:siswa')->name('electives');
+        Route::post('/peminatan/toggle', [LmsController::class, 'toggleElective'])
+            ->middleware('role:siswa')->name('electives.toggle');
     });
 
     // ─── PAYMENT (Siswa & Bendahara) ──────────────────────────────────────────────
@@ -92,17 +98,17 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('role:siswa')->name('student.confirmation');
         Route::get('/kwitansi/{paymentId}', [PaymentController::class, 'receipt'])->name('student.receipt');
 
-        // Bendahara / Admin
+        // Bendahara ONLY (Fitur Keuangan dipindahkan dari admin ke bendahara)
         Route::get('/keuangan', [PaymentController::class, 'financeIndex'])
-            ->middleware('role:bendahara,admin')->name('finance.index');
+            ->middleware('role:bendahara')->name('finance.index');
         Route::post('/keuangan/verifikasi/{paymentId}', [PaymentController::class, 'verifyPayment'])
-            ->middleware('role:bendahara,admin')->name('finance.verify');
+            ->middleware('role:bendahara')->name('finance.verify');
         Route::get('/keuangan/generate-tagihan', [PaymentController::class, 'generateBills'])
-            ->middleware('role:bendahara,admin')->name('finance.generate');
+            ->middleware('role:bendahara')->name('finance.generate');
         Route::post('/keuangan/generate-tagihan', [PaymentController::class, 'storeBills'])
-            ->middleware('role:bendahara,admin')->name('finance.storeBills');
+            ->middleware('role:bendahara')->name('finance.storeBills');
         Route::get('/keuangan/laporan', [PaymentController::class, 'financeReport'])
-            ->middleware('role:bendahara,admin')->name('finance.report');
+            ->middleware('role:bendahara')->name('finance.report');
     });
 
     // ─── ADMIN ───────────────────────────────────────────────────────────────
@@ -125,6 +131,25 @@ Route::middleware(['auth'])->group(function () {
         // Class management
         Route::get('/kelas', [AdminController::class, 'classes'])->name('classes');
         Route::post('/kelas', [AdminController::class, 'storeClass'])->name('classes.store');
+
+        // Subjects Management (Master Mata Pelajaran & Peminatan)
+        Route::get('/mata-pelajaran', [AdminController::class, 'subjects'])->name('subjects');
+        Route::post('/mata-pelajaran', [AdminController::class, 'storeSubject'])->name('subjects.store');
+        Route::put('/mata-pelajaran/{id}', [AdminController::class, 'updateSubject'])->name('subjects.update');
+        Route::delete('/mata-pelajaran/{id}', [AdminController::class, 'deleteSubject'])->name('subjects.delete');
+
+        // Course Plotting (Plotting Mata Pelajaran ke Kelas)
+        Route::get('/plotting-mapel', [AdminController::class, 'coursePlotting'])->name('courses.plotting');
+        Route::post('/plotting-mapel', [AdminController::class, 'storeCourse'])->name('courses.store');
+        Route::put('/plotting-mapel/{id}', [AdminController::class, 'updateCourse'])->name('courses.update');
+        Route::delete('/plotting-mapel/{id}', [AdminController::class, 'deleteCourse'])->name('courses.delete');
+
+        // Electives Management (Peminatan Siswa Kelas 11-12)
+        Route::get('/peminatan', [AdminController::class, 'electiveManagement'])->name('electives');
+        Route::post('/peminatan/toggle', [AdminController::class, 'toggleElectiveForStudent'])->name('electives.toggle');
+
+        // Monitor All Courses (Admin Memantau Seluruh Mapel di Semua Kelas)
+        Route::get('/pantau-mapel', [AdminController::class, 'monitorCourses'])->name('courses.monitor');
 
         // PPDB Registration management
         Route::get('/ppdb', [AdminController::class, 'registrations'])->name('registrations');

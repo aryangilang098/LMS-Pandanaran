@@ -27,4 +27,29 @@ class SchoolClass extends Model
     {
         return $this->hasMany(Course::class, 'class_id');
     }
+
+    public function getGradeLevel(): string
+    {
+        $name = strtoupper(trim($this->name));
+        if (preg_match('/\bXII\b/', $name) || str_starts_with($name, 'XII')) {
+            return '12';
+        }
+        if (preg_match('/\bXI\b/', $name) || str_starts_with($name, 'XI')) {
+            return '11';
+        }
+        if (preg_match('/\bX\b/', $name) || str_starts_with($name, 'X')) {
+            return '10';
+        }
+        return '10';
+    }
+
+    public function isGrade10(): bool
+    {
+        return $this->getGradeLevel() === '10';
+    }
+
+    public function isSeniorGrade(): bool
+    {
+        return in_array($this->getGradeLevel(), ['11', '12']);
+    }
 }

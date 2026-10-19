@@ -358,10 +358,17 @@
     </div>
     <ul class="sidebar-nav">
         <li class="sidebar-nav-item">
-            <a href="{{ route('lms.courses') }}" class="{{ request()->routeIs('lms.*') ? 'active' : '' }}">
+            <a href="{{ route('lms.courses') }}" class="{{ request()->routeIs('lms.courses*') || request()->routeIs('lms.course.*') ? 'active' : '' }}">
                 <i class="bi bi-mortarboard-fill"></i> Kelas & Mata Pelajaran
             </a>
         </li>
+        @if(auth()->user()->isSiswa())
+        <li class="sidebar-nav-item">
+            <a href="{{ route('lms.electives') }}" class="{{ request()->routeIs('lms.electives*') ? 'active' : '' }}">
+                <i class="bi bi-bookmarks-fill"></i> Peminatan Mapel (11-12)
+            </a>
+        </li>
+        @endif
         <li class="sidebar-nav-item">
             <a href="{{ route('exam_cards.student') }}" class="{{ request()->routeIs('exam_cards.student') ? 'active' : '' }}">
                 <i class="bi bi-card-heading"></i> Kartu Ujian (UTS & UAS)
@@ -383,9 +390,10 @@
     </ul>
     @endif
 
-    @if(auth()->user()->isBendahara() || auth()->user()->isAdmin())
+    {{-- Fitur Keuangan HANYA untuk Bendahara (Dipindahkan dari Admin ke Bendahara) --}}
+    @if(auth()->user()->isBendahara())
     <div class="sidebar-section">
-        <div class="sidebar-section-label">Keuangan & SPP</div>
+        <div class="sidebar-section-label">Keuangan & SPP (Bendahara)</div>
     </div>
     <ul class="sidebar-nav">
         <li class="sidebar-nav-item">
@@ -406,11 +414,40 @@
     </ul>
     @endif
 
-
-
     @if(auth()->user()->isAdmin())
     <div class="sidebar-section">
-        <div class="sidebar-section-label">Administrasi</div>
+        <div class="sidebar-section-label">Kurikulum & Mapel</div>
+    </div>
+    <ul class="sidebar-nav">
+        <li class="sidebar-nav-item">
+            <a href="{{ route('admin.courses.plotting') }}" class="{{ request()->routeIs('admin.courses.plotting') ? 'active' : '' }}">
+                <i class="bi bi-diagram-3-fill"></i> Plotting Mapel Kelas
+            </a>
+        </li>
+        <li class="sidebar-nav-item">
+            <a href="{{ route('admin.electives') }}" class="{{ request()->routeIs('admin.electives*') ? 'active' : '' }}">
+                <i class="bi bi-bookmarks-fill"></i> Peminatan (Kelas 11-12)
+            </a>
+        </li>
+        <li class="sidebar-nav-item">
+            <a href="{{ route('admin.courses.monitor') }}" class="{{ request()->routeIs('admin.courses.monitor') ? 'active' : '' }}">
+                <i class="bi bi-binoculars-fill"></i> Pantau Seluruh Mapel
+            </a>
+        </li>
+        <li class="sidebar-nav-item">
+            <a href="{{ route('admin.subjects') }}" class="{{ request()->routeIs('admin.subjects*') ? 'active' : '' }}">
+                <i class="bi bi-book-half"></i> Master Mata Pelajaran
+            </a>
+        </li>
+        <li class="sidebar-nav-item">
+            <a href="{{ route('admin.classes') }}" class="{{ request()->routeIs('admin.classes*') ? 'active' : '' }}">
+                <i class="bi bi-building-fill"></i> Kelas & Rombel
+            </a>
+        </li>
+    </ul>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Administrasi & Publikasi</div>
     </div>
     <ul class="sidebar-nav">
         <li class="sidebar-nav-item">
@@ -431,11 +468,6 @@
         <li class="sidebar-nav-item">
             <a href="{{ route('admin.posts', ['category' => 'prestasi']) }}" class="{{ request()->routeIs('admin.posts*') && request('category') === 'prestasi' ? 'active' : '' }}">
                 <i class="bi bi-trophy-fill"></i> Jejak Keberhasilan
-            </a>
-        </li>
-        <li class="sidebar-nav-item">
-            <a href="{{ route('admin.classes') }}" class="{{ request()->routeIs('admin.classes*') ? 'active' : '' }}">
-                <i class="bi bi-building-fill"></i> Kelas & Rombel
             </a>
         </li>
         <li class="sidebar-nav-item">

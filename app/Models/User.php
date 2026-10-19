@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable
 {
@@ -95,5 +96,26 @@ class User extends Authenticatable
     public function examCards(): HasMany
     {
         return $this->hasMany(ExamCard::class, 'user_id');
+    }
+
+    // Elective subjects chosen by student
+    public function electiveSubjects(): BelongsToMany
+    {
+        return $this->belongsToMany(Subject::class, 'student_elective_subjects', 'student_id', 'subject_id')
+            ->withPivot('academic_year', 'status')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the grade level from class name (e.g. "X MIPA 1" => "10", "XI IPS 1" => "11", "XII Keagamaan" => "12")
+     */
+    public function getGradeLevelAttribute(): ?string
+    {
+        if (!$this->schoolClass) return null;
+        $name = $this->schoolClass->name;
+        if (preg_match('/^XII/i', $name)) return '12';
+        if (preg_match('/^XI/i', $name)) return '11';
+        if (preg_match('/^X/i', $name)) return '10';
+        return null;
     }
 }
